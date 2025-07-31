@@ -794,10 +794,9 @@
 }
 
         function app() {
-			const datas = JSON.parse(localStorage.getItem("s"));
             return {
                 courses: jadwalData.mata_kuliah,
-                selectedCourses: datas||[],
+                selectedCourses: [],
                 searchQuery: '',
                 filterType: '',
                 days: ['SENIN', 'SELASA', 'RABU', 'KAMIS', "JUM'AT"],
@@ -833,7 +832,6 @@
                     } else {
                         this.selectedCourses = [...this.selectedCourses, course];
                     }
-					localStorage.setItem("s",JSON.stringify(this.selectedCourses))
                 },
                 
                 // Mendapatkan mata kuliah per hari
