@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pemilihan Jadwal Mata Kuliah</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#1d4ed8',
+                        danger: '#ef4444',
+                        success: '#22c55e',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .schedule-item {
+            transition: all 0.2s ease;
+        }
+        .schedule-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .conflict {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div x-data="app()" class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Pemilihan Jadwal Mata Kuliah</h1>
+            <p class="text-gray-600 max-w-2xl mx-auto">Pilih mata kuliah yang ingin Anda ambil dan lihat jadwalnya. Sistem akan menandai jadwal yang bertabrakan.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Daftar Mata Kuliah -->
+            <div class="lg:col-span-1 bg-white rounded-xl shadow-md p-6 h-fit">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800">Daftar Mata Kuliah</h2>
+                    <div class="text-sm">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                            Terpilih: <span x-text="selectedCourses.length"></span>
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Filter -->
+                <div class="mb-4">
+                    <div class="flex gap-2 mb-3">
+                        <input 
+                            x-model="searchQuery" 
+                            type="text" 
+                            placeholder="Cari mata kuliah..." 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                        <button 
+                            @click="searchQuery = ''" 
+                            class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="flex gap-2 flex-wrap">
+                        <button 
+                            @click="filterType = ''" 
+                            :class="{'bg-blue-500 text-white': filterType === ''}" 
+                            class="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg"
+                        >
+                            Semua
+                        </button>
+                        <button 
+                            @click="filterType = 'TATAP MUKA'" 
+                            :class="{'bg-blue-500 text-white': filterType === 'TATAP MUKA'}" 
+                            class="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg"
+                        >
+                            Tatap Muka
+                        </button>
+                        <button 
+                            @click="filterType = 'PRAKTIKUM'" 
+                            :class="{'bg-blue-500 text-white': filterType === 'PRAKTIKUM'}" 
+                            class="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg"
+                        >
+                            Praktikum
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Daftar Matkul -->
+                <div class="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                    <template x-for="(course, index) in filteredCourses" :key="index">
+                        <div 
+                            :class="{
+                                'border-blue-500 bg-blue-50': selectedCourses.includes(course),
+                                'border-red-500': hasConflict(course)
+                            }" 
+                            class="border rounded-lg p-4 schedule-item cursor-pointer"
+                            @click="toggleCourse(course)"
+                        >
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-semibold text-gray-800" x-text="course.nama"></h3>
+                                    <div class="flex items-center mt-1 text-sm text-gray-600">
+                                        <span class="bg-gray-200 px-2 py-0.5 rounded mr-2" x-text="course.jenis"></span>
+                                        <span><i class="fas fa-user text-gray-500 mr-1"></i> <span x-text="course.dosen"></span></span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span 
+                                        x-show="hasConflict(course)" 
+                                        class="px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded-full"
+                                    >
+                                        <i class="fas fa-exclamation-triangle mr-1"></i> Konflik
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="mt-3 flex justify-between text-sm">
+                                <div>
+                                    <span class="text-gray-600"><i class="far fa-calendar mr-1"></i> <span x-text="course.hari"></span></span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600"><i class="far fa-clock mr-1"></i> <span x-text="course.waktu"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <p 
+                        x-show="filteredCourses.length === 0" 
+                        class="text-center text-gray-500 py-4"
+                    >
+                        Tidak ada mata kuliah yang ditemukan
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Jadwal dan Konflik -->
+            <div class="lg:col-span-2">
+                <!-- Jadwal Mingguan -->
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Jadwal Mingguan</h2>
+                    
+                    <div class="grid grid-cols-5 gap-2">
+                        <template x-for="day in days" :key="day">
+                            <div class="border rounded-lg">
+                                <div class="bg-blue-50 py-2 text-center font-semibold border-b" x-text="day"></div>
+                                <div class="min-h-[100px] p-2">
+                                    <template x-for="course in getCoursesByDay(day)">
+                                        <div 
+                                            :class="{
+                                                'border-blue-500 bg-blue-100': !hasConflict(course),
+                                                'border-red-500 bg-red-100 conflict': hasConflict(course)
+                                            }" 
+                                            class="border rounded p-2 mb-2 text-sm"
+                                        >
+                                            <div class="font-semibold" x-text="course.nama"></div>
+                                            <div class="text-gray-600" x-text="course.waktu"></div>
+                                            <div class="text-gray-600 text-xs" x-text="course.ruangan"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Daftar Konflik -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Daftar Konflik Jadwal</h2>
+                    
+                    <template x-if="conflictList.length === 0">
+                        <div class="text-center py-6">
+                            <div class="text-green-500 text-5xl mb-4">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <p class="text-gray-600">Tidak ada konflik jadwal pada mata kuliah yang dipilih</p>
+                        </div>
+                    </template>
+                    
+                    <template x-for="conflict in conflictList" :key="conflict.course1.nama + conflict.course2.nama">
+                        <div class="border border-red-300 rounded-lg p-4 mb-4 bg-red-50">
+                            <div class="font-semibold text-red-700 mb-2">
+                                <i class="fas fa-exclamation-triangle mr-2"></i> Konflik Jadwal
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="font-medium" x-text="conflict.course1.nama"></div>
+                                    <div class="text-sm text-gray-600" x-text="'Hari: ' + conflict.course1.hari"></div>
+                                    <div class="text-sm text-gray-600" x-text="'Waktu: ' + conflict.course1.waktu"></div>
+                                    <div class="text-sm text-gray-600" x-text="'Ruangan: ' + conflict.course1.ruangan"></div>
+                                </div>
+                                <div>
+                                    <div class="font-medium" x-text="conflict.course2.nama"></div>
+                                    <div class="text-sm text-gray-600" x-text="'Hari: ' + conflict.course2.hari"></div>
+                                    <div class="text-sm text-gray-600" x-text="'Waktu: ' + conflict.course2.waktu"></div>
+                                    <div class="text-sm text-gray-600" x-text="'Ruangan: ' + conflict.course2.ruangan"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data jadwal mata kuliah
+        const jadwalData = {
+  "mata_kuliah": [
+    {
+      "nama": "Design Pattern ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "SENIN",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Tio"
+    },
+    {
+      "nama": "Game Intelligence ( A )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "SENIN",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Ariful, Pak Erik"
+    },
+    {
+      "nama": "Kriptografi Modern ( A )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "SENIN",
+      "waktu": "08:50 - 10:30",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Anton, Pak Rizky"
+    },
+    {
+      "nama": "Grafika Komputer ( B )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "SENIN",
+      "waktu": "10:40 - 12:20",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Erik, Pak Gama, Bu Annisa"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( C / 1 )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "SENIN",
+      "waktu": "12:30 - 14:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Tio, Bu Gayatri, Pak Yudha"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( D / 1 )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "SENIN",
+      "waktu": "12:30 - 14:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Anton, Prof Saiful, Pak Gama, Pak Beny, Pak Is"
+    },
+    {
+      "nama": "Kriptografi ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "SENIN",
+      "waktu": "12:30 - 15:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Diksy"
+    },
+    {
+      "nama": "Pemodelan dan Simulasi ( A )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "SENIN",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Annisa, Pak Fadhel"
+    },
+    {
+      "nama": "Software Design ( A )",
+      "ruangan": "Ruang Kuliah C 2.3",
+      "hari": "SENIN",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Andryan"
+    },
+    {
+      "nama": "Sistem Informasi Geografis ( A )",
+      "ruangan": "Ruang Kuliah C 2.4",
+      "hari": "SENIN",
+      "waktu": "16:10 - 17:50",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Erik, Pak Rizky, Pak Akbar, Pak Habib"
+    },
+    {
+      "nama": "Penginderaan jauh dalam Agroindustri ( A )",
+      "ruangan": "Ruang Kuliah CDAST 1",
+      "hari": "SENIN",
+      "waktu": "16:10 - 17:50",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Erik, Pak Rizky, Pak Akbar, Pak Habib"
+    },
+    {
+      "nama": "Implementasi dan Pengujian Perangkat Lunak ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "SELASA",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Saiful"
+    },
+    {
+      "nama": "Implementasi dan Pengujian Perangkat Lunak ( B )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "SELASA",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Stanis"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( B / 1 )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "SELASA",
+      "waktu": "08:50 - 10:30",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Slamin, Bu Yuyun, Pak Ariful"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( A / 1 )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "SELASA",
+      "waktu": "10:40 - 12:20",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly"
+    },
+    {
+      "nama": "Information Retrieval ( A )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "SELASA",
+      "waktu": "11:30 - 13:20",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Brian, Pak Dony, Pak Fadhel"
+    },
+    {
+      "nama": "Teori Bahasa dan Otomata ( B )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "SELASA",
+      "waktu": "13:20 - 15:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Rizky, Pak Gama"
+    },
+    {
+      "nama": "Speech Processing ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "SELASA",
+      "waktu": "15:10 - 17:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Brian, Pak Dony"
+    },
+    {
+      "nama": "Requirement Engineering ( B )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "SELASA",
+      "waktu": "15:10 - 17:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Erik, Pak Stanis"
+    },
+    {
+      "nama": "Pemodelan dan Animasi Komputer ( A )",
+      "ruangan": "Ruang Kuliah C 2.3",
+      "hari": "SELASA",
+      "waktu": "15:10 - 17:50",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Andryan, Pak Brian, Pak Dony"
+    },
+    {
+      "nama": "Sistem Pakar ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "RABU",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Gayatri, Pak Fadhel, Pak Andryan"
+    },
+    {
+      "nama": "Pengolahan Citra Digital ( A )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "RABU",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Damar, Bu Annisa, Pak Stanis"
+    },
+    {
+      "nama": "Deep Learning ( A )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "RABU",
+      "waktu": "08:50 - 10:30",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly, Bu Damar, Pak Stanis"
+    },
+    {
+      "nama": "Struktur Data ( B )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "RABU",
+      "waktu": "10:40 - 12:20",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Fadhel"
+    },
+    {
+      "nama": "Pemrosesan Sinyal ( A )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "RABU",
+      "waktu": "12:30 - 14:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly"
+    },
+    {
+      "nama": "Algoritma Evolusi ( A )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "RABU",
+      "waktu": "12:30 - 15:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Gayatri, Pak Gama"
+    },
+    {
+      "nama": "Pemrosesan Bahasa Alami ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "RABU",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Brian, Pak Dony, Pak Fadhel"
+    },
+    {
+      "nama": "Aplikasi Teori Graf ( A )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "RABU",
+      "waktu": "15:10 - 17:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Slamin, Pak Rizky, Bu Yuyun, Pak Gama"
+    },
+    {
+      "nama": "Bioinformatika ( A )",
+      "ruangan": "Ruang Kuliah C 2.3",
+      "hari": "RABU",
+      "waktu": "15:10 - 17:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly, Pak Stanis"
+    },
+    {
+      "nama": "Basis Data Graf ( A )",
+      "ruangan": "Ruang Kuliah C 2.4",
+      "hari": "RABU",
+      "waktu": "15:10 - 17:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Ariful, Pak Rizky"
+    },
+    {
+      "nama": "Teknologi Imersi ( A )",
+      "ruangan": "Ruang Kuliah CDAST 1",
+      "hari": "RABU",
+      "waktu": "15:10 - 17:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Erik, Bu Damar, Pak Ranggi"
+    },
+    {
+      "nama": "Data Science ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "KAMIS",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Stanis, Pak Fadhel"
+    },
+    {
+      "nama": "Forensik Digital ( A )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "KAMIS",
+      "waktu": "07:00 - 08:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Damar, Pak Stanis, Bu Annisa"
+    },
+    {
+      "nama": "Computer Vision ( A )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "KAMIS",
+      "waktu": "07:00 - 09:40",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Dony, Pak Fadhel"
+    },
+    {
+      "nama": "Manajemen Risiko TI ( A )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "KAMIS",
+      "waktu": "07:50 - 10:30",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Beny"
+    },
+    {
+      "nama": "Data Science ( B )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "KAMIS",
+      "waktu": "08:50 - 10:30",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly, Bu Gayatri, Bu Yuyun"
+    },
+    {
+      "nama": "Game Design and Development ( A )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "KAMIS",
+      "waktu": "12:30 - 14:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Ariful, Pak Erik, Pak Gama"
+    },
+    {
+      "nama": "Data Visualization ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "KAMIS",
+      "waktu": "12:30 - 14:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly, Bu Yuyun, Bu Gayatri"
+    },
+    {
+      "nama": "Graf Pengetahuan ( A )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "KAMIS",
+      "waktu": "12:30 - 14:10",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Ariful, Pak Rizky"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( B / 2 )",
+      "ruangan": "Ruang Kuliah C 2.3",
+      "hari": "KAMIS",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Slamin, Bu Yuyun, Pak Ariful"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( C / 2 )",
+      "ruangan": "Ruang Kuliah C 2.4",
+      "hari": "KAMIS",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Pak Tio, Bu Gayatri, Pak Yudha"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( D / 2 )",
+      "ruangan": "Ruang Kuliah CDAST 1",
+      "hari": "KAMIS",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Prof Anton, Prof Saiful, Pak Gama, Pak Beny, Pak Is"
+    },
+    {
+      "nama": "Metodologi Penelitian & Proposal 1 ( A / 2 )",
+      "ruangan": "Ruang Kuliah CDAST 2",
+      "hari": "KAMIS",
+      "waktu": "14:20 - 16:00",
+      "jenis": "TATAP MUKA",
+      "dosen": "Bu Nelly"
+    },
+    {
+      "nama": "Kecerdasan Buatan ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Kecerdasan Buatan ( B )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "PPL Untuk Agroindustri Modern ( A )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Speech Processing ( A )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "KAMIS",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Pemodelan dan Simulasi ( A )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Sistem Informasi Geografis ( A )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Design Pattern ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Penginderaan jauh dalam Agroindustri ( A )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "KAMIS",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Bioinformatika ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "JUM'AT",
+      "waktu": "07:00 - 09:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Game Intelligence ( A )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "JUM'AT",
+      "waktu": "09:40 - 12:20",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Pengolahan Citra Digital ( A )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "JUM'AT",
+      "waktu": "09:40 - 12:20",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Information Retrieval ( A )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "JUM'AT",
+      "waktu": "09:40 - 12:20",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Data Science ( A )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "JUM'AT",
+      "waktu": "09:40 - 12:20",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Data Science ( A )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "JUM'AT",
+      "waktu": "09:40 - 12:20",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Deep Learning ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "JUM'AT",
+      "waktu": "12:30 - 15:10",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Sistem Pakar ( A )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "JUM'AT",
+      "waktu": "12:30 - 15:10",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Computer Vision ( A )",
+      "ruangan": "Ruang Kuliah C 2.3",
+      "hari": "JUM'AT",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Pemrosesan Bahasa Alami ( A )",
+      "ruangan": "Ruang Kuliah C 2.4",
+      "hari": "JUM'AT",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Pemodelan dan Animasi Komputer ( A )",
+      "ruangan": "Ruang Kuliah CDAST 1",
+      "hari": "JUM'AT",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Basis Data Graf ( A )",
+      "ruangan": "Ruang Kuliah CDAST 2",
+      "hari": "JUM'AT",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Software Design ( A )",
+      "ruangan": "Ruang Kuliah A 3.1",
+      "hari": "JUM'AT",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Data Visualization ( A )",
+      "ruangan": "Ruang Kuliah A 3.2",
+      "hari": "JUM'AT",
+      "waktu": "15:10 - 17:50",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Pemrosesan Sinyal ( A )",
+      "ruangan": "Ruang Kuliah A 3.3",
+      "hari": "JUM'AT",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Game Design and Development ( A )",
+      "ruangan": "Ruang Kuliah A 3.4",
+      "hari": "JUM'AT",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Teknologi Imersi ( A )",
+      "ruangan": "Ruang Kuliah B 1",
+      "hari": "JUM'AT",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Aplikasi Teori Graf ( A )",
+      "ruangan": "Ruang Kuliah B 2",
+      "hari": "JUM'AT",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Kriptografi Modern ( A )",
+      "ruangan": "Ruang Kuliah C 2.1",
+      "hari": "JUM'AT",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    },
+    {
+      "nama": "Graf Pengetahuan ( A )",
+      "ruangan": "Ruang Kuliah C 2.2",
+      "hari": "JUM'AT",
+      "waktu": "18:00 - 20:40",
+      "jenis": "PRAKTIKUM",
+      "dosen": "Tidak ada informasi"
+    }
+  ]
+}
+
+        function app() {
+            return {
+                courses: jadwalData.mata_kuliah,
+                selectedCourses: [],
+                searchQuery: '',
+                filterType: '',
+                days: ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT'],
+                
+                // Filter mata kuliah berdasarkan pencarian dan jenis
+                get filteredCourses() {
+                    let filtered = this.courses;
+                    
+                    // Filter berdasarkan jenis
+                    if (this.filterType) {
+                        filtered = filtered.filter(course => 
+                            course.jenis === this.filterType
+                        );
+                    }
+                    
+                    // Filter berdasarkan pencarian
+                    if (this.searchQuery) {
+                        const query = this.searchQuery.toLowerCase();
+                        filtered = filtered.filter(course => 
+                            course.nama.toLowerCase().includes(query) ||
+                            course.dosen.toLowerCase().includes(query) ||
+                            course.ruangan.toLowerCase().includes(query)
+                        );
+                    }
+                    
+                    return filtered;
+                },
+                
+                // Toggle pemilihan mata kuliah
+                toggleCourse(course) {
+                    if (this.selectedCourses.includes(course)) {
+                        this.selectedCourses = this.selectedCourses.filter(c => c !== course);
+                    } else {
+                        this.selectedCourses = [...this.selectedCourses, course];
+                    }
+                },
+                
+                // Mendapatkan mata kuliah per hari
+                getCoursesByDay(day) {
+                    return this.selectedCourses
+                        .filter(course => course.hari === day)
+                        .sort((a, b) => {
+                            const timeA = this.getTimeValue(a.waktu);
+                            const timeB = this.getTimeValue(b.waktu);
+                            return timeA - timeB;
+                        });
+                },
+                
+                // Konversi waktu ke angka untuk sorting
+                getTimeValue(timeStr) {
+                    const [start] = timeStr.split(' - ');
+                    const [hours, minutes] = start.split(':').map(Number);
+                    return hours * 60 + minutes;
+                },
+                
+                // Mendapatkan waktu mulai dan selesai
+                getTimeRange(timeStr) {
+                    const [start, end] = timeStr.split(' - ');
+                    return {
+                        start: this.getTimeValue(start),
+                        end: this.getTimeValue(end)
+                    };
+                },
+                
+                // Mengecek apakah ada konflik jadwal untuk suatu mata kuliah
+                hasConflict(course) {
+                    if (!this.selectedCourses.includes(course)) return false;
+                    
+                    const courseTime = this.getTimeRange(course.waktu);
+                    
+                    for (let other of this.selectedCourses) {
+                        if (other === course) continue;
+                        
+                        if (course.hari === other.hari) {
+                            const otherTime = this.getTimeRange(other.waktu);
+                            
+                            // Cek apakah ada tumpang tindih waktu
+                            if (courseTime.start < otherTime.end && courseTime.end > otherTime.start) {
+                                return true;
+                            }
+                        }
+                    }
+                    
+                    return false;
+                },
+                
+                // Mendapatkan daftar konflik
+                get conflictList() {
+                    const conflicts = [];
+                    const added = new Set();
+                    
+                    for (let i = 0; i < this.selectedCourses.length; i++) {
+                        const course1 = this.selectedCourses[i];
+                        const time1 = this.getTimeRange(course1.waktu);
+                        
+                        for (let j = i + 1; j < this.selectedCourses.length; j++) {
+                            const course2 = this.selectedCourses[j];
+                            
+                            // Cek apakah konflik sudah ditambahkan
+                            const conflictKey = [course1.nama, course2.nama].sort().join('|');
+                            if (added.has(conflictKey)) continue;
+                            
+                            if (course1.hari === course2.hari) {
+                                const time2 = this.getTimeRange(course2.waktu);
+                                
+                                // Cek apakah ada tumpang tindih waktu
+                                if (time1.start < time2.end && time1.end > time2.start) {
+                                    conflicts.push({
+                                        course1,
+                                        course2
+                                    });
+                                    added.add(conflictKey);
+                                }
+                            }
+                        }
+                    }
+                    
+                    return conflicts;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
